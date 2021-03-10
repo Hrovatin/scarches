@@ -1,7 +1,9 @@
 import torch
+import scanpy as sc
+import pandas as pd
+import numpy as np
 from sklearn.cluster import KMeans
 from torch.distributions import Normal
-import numpy as np
 from .trainer import Trainer
 from ._utils import make_dataset, euclidean_dist
 
@@ -59,6 +61,7 @@ class tranVAETrainer(Trainer):
             model,
             adata,
             n_clusters: int = None,
+            clustering: str = 'kmeans',
             eta: float = 1,
             tau: float = 0,
             labeled_indices: list = None,
@@ -88,7 +91,8 @@ class tranVAETrainer(Trainer):
         else:
             self.labeled_indices = labeled_indices
         self.update_labeled_indices(self.labeled_indices)
-        self.n_clusters = self.model.n_cell_types if n_clusters is None else n_clusters
+        self.clustering = clustering
+        self.n_clusters = n_clusters
         self.n_labeled = self.model.n_cell_types
         self.lndmk_optim = None
 
@@ -144,7 +148,7 @@ class tranVAETrainer(Trainer):
                 torch.stack(self.landmarks_unlabeled).squeeze(),
                 self.tau,
             )
-            landmark_loss = landmark_loss+ unlabeled_loss
+            landmark_loss = landmark_loss + unlabeled_loss
         if 1 in label_categories:
             labeled_loss, labeled_accuracy = self.landmark_labeled_loss(
                 latent[total_batch['labeled'] == 1],
@@ -234,18 +238,61 @@ class tranVAETrainer(Trainer):
 
         # Init unlabeled Landmarks if unlabeled data existent
         if 0 in self.train_data.labeled_vector.unique().tolist():
-            self.landmarks_unlabeled = [
-                torch.zeros(
-                    size=(1, self.model.latent_dim),
-                    requires_grad=True,
-                    device=self.device)
-                for _ in range(self.n_clusters)
-            ]
-            k_means = KMeans(n_clusters=self.n_clusters,
-                             random_state=0).fit(latent[self.train_data.labeled_vector == 0].cpu().detach().numpy())
-            k_means_lndmk = torch.tensor(k_means.cluster_centers_, device=self.device)
-            with torch.no_grad():
-                [self.landmarks_unlabeled[i].copy_(k_means_lndmk[i, :]) for i in range(k_means_lndmk.shape[0])]
+            # Full latent here (also labeled data), maybe change back to only unlabeled
+            # lat_array = latent[self.train_data.labeled_vector == 0].cpu().detach().numpy()
+            lat_array = latent.cpu().detach().numpy()
+
+            if self.clustering == 'kmeans' and self.n_clusters is not None:
+                print(f'Initializing unlabeled landmarks with KMeans-Clustering with a given number of'
+                      f'{self.n_clusters} clusters.')
+                k_means = KMeans(n_clusters=self.n_clusters).fit(lat_array)
+                k_means_lndmk = torch.tensor(k_means.cluster_centers_, device=self.device)
+
+                self.landmarks_unlabeled = [
+                    torch.zeros(
+                        size=(1, self.model.latent_dim),
+                        requires_grad=True,
+                        device=self.device)
+                    for _ in range(self.n_clusters)
+                ]
+
+                with torch.no_grad():
+                    [self.landmarks_unlabeled[i].copy_(k_means_lndmk[i, :]) for i in range(k_means_lndmk.shape[0])]
+            else:
+                if self.clustering == 'kmeans' and self.n_clusters is None:
+                    print(f'Initializing unlabeled landmarks with Louvain-Clustering because no value for the'
+                          f'number of clusters was given.')
+                else:
+                    print(f'Initializing unlabeled landmarks with Louvain-Clustering with an unknown number of '
+                          f'clusters.')
+                lat_adata = sc.AnnData(lat_array)
+                sc.pp.neighbors(lat_adata)
+                sc.tl.louvain(lat_adata)
+
+                # Taken from DESC model
+                features = pd.DataFrame(lat_adata.X, index=np.arange(0, lat_adata.shape[0]))
+                Group = pd.Series(
+                    np.asarray(lat_adata.obs['louvain'],dtype=int),
+                    index=np.arange(0, lat_adata.shape[0]),
+                    name="Group"
+                )
+                Mergefeature = pd.concat([features, Group], axis=1)
+                cluster_centers = np.asarray(Mergefeature.groupby("Group").mean())
+
+                self.n_clusters = cluster_centers.shape[0]
+                print(f'Louvain Clustering succesful. Found {self.n_clusters} clusters.')
+                louvain_lndmk = torch.tensor(cluster_centers, device=self.device)
+
+                self.landmarks_unlabeled = [
+                    torch.zeros(
+                        size=(1, self.model.latent_dim),
+                        requires_grad=True,
+                        device=self.device)
+                    for _ in range(self.n_clusters)
+                ]
+
+                with torch.no_grad():
+                    [self.landmarks_unlabeled[i].copy_(louvain_lndmk[i, :]) for i in range(louvain_lndmk.shape[0])]
 
     def update_labeled_landmarks(self, latent, labels, previous_landmarks, tau, mask=None):
         with torch.no_grad():

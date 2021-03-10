@@ -68,7 +68,7 @@ tranvae = sca.models.TRANVAE(
     labeled_indices=labeled_ind,
     hidden_layer_sizes=[128, 128],
     use_mmd=False,
-    n_clusters=10,
+    clustering='louvain',
 )
 tranvae.model.load_state_dict(torch.load(os.path.expanduser(f'~/Documents/reference_model_state_dict')))
 

@@ -53,6 +53,7 @@ class TRANVAE(BaseMixin):
         cell_types: Optional[list] = None,
         labeled_indices: Optional[list] = None,
         n_clusters: Optional[int] = None,
+        clustering: Optional[str] = None,
         landmarks_labeled: Optional[list] = None,
         landmarks_normalize: Optional[list] = None,
         landmarks_unlabeled: Optional[np.ndarray] = None,
@@ -128,8 +129,8 @@ class TRANVAE(BaseMixin):
             use_ln=self.use_ln_,
         )
 
-        self.n_clusters_ = self.model.n_cell_types if n_clusters is None else n_clusters
-
+        self.n_clusters_ = n_clusters
+        self.clustering_ = clustering
         self.is_trained_ = False
 
         self.trainer = None
@@ -158,6 +159,7 @@ class TRANVAE(BaseMixin):
             self.model,
             self.adata,
             n_clusters=self.n_clusters_,
+            clustering=self.clustering_,
             labeled_indices=self.labeled_indices_,
             condition_key=self.condition_key_,
             cell_type_key=self.cell_type_key_,
@@ -312,6 +314,7 @@ class TRANVAE(BaseMixin):
             'cell_types': dct['cell_types_'],
             'labeled_indices': dct['labeled_indices_'],
             'n_clusters': dct['n_clusters_'],
+            'clustering': dct['clustering_'],
             'landmarks_labeled': dct['landmarks_labeled_'],
             'landmarks_normalize': dct['landmarks_normalize_'],
             'landmarks_unlabeled': dct['landmarks_unlabeled_'],
@@ -345,6 +348,7 @@ class TRANVAE(BaseMixin):
         reference_model: Union[str, 'TRVAE'],
         labeled_indices: Optional[list] = None,
         n_clusters: Optional[int] = None,
+        clustering: Optional[str] = None,
         freeze: bool = True,
         freeze_expression: bool = True,
         remove_dropout: bool = True,
@@ -408,6 +412,7 @@ class TRANVAE(BaseMixin):
             init_params['dr_rate'] = 0.0
 
         init_params['n_clusters'] = n_clusters
+        init_params['clustering'] = clustering
         init_params['labeled_indices'] = labeled_indices
 
         new_model = cls(adata, **init_params)
