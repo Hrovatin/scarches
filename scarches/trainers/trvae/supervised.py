@@ -62,6 +62,7 @@ class tranVAETrainer(Trainer):
             adata,
             n_clusters: int = None,
             clustering: str = 'kmeans',
+            use_unlabeled_loss: bool = True,
             eta: float = 1,
             tau: float = 0,
             labeled_indices: list = None,
@@ -75,7 +76,7 @@ class tranVAETrainer(Trainer):
             landmarks_means = []
             for landmark in self.model.landmarks_labeled:
                 landmarks_means.append(landmark.mean)
-            self.landmarks_labeled = torch.cat(landmarks_means)
+            self.landmarks_labeled = torch.stack(landmarks_means)
 
         if self.landmarks_labeled is not None:
             self.landmarks_labeled = self.landmarks_labeled.to(device=self.device)
@@ -93,6 +94,7 @@ class tranVAETrainer(Trainer):
         self.update_labeled_indices(self.labeled_indices)
         self.clustering = clustering
         self.n_clusters = n_clusters
+        self.use_unlabeled_loss = use_unlabeled_loss
         self.n_labeled = self.model.n_cell_types
         self.lndmk_optim = None
 
@@ -142,7 +144,7 @@ class tranVAETrainer(Trainer):
         landmark_loss = torch.tensor(0, device=self.device, requires_grad=False)
         unlabeled_loss = torch.tensor(0, device=self.device, requires_grad=False)
         labeled_loss = torch.tensor(0, device=self.device, requires_grad=False)
-        if 0 in label_categories:
+        if 0 in label_categories and self.use_unlabeled_loss:
             unlabeled_loss, _ = self.landmark_unlabeled_loss(
                 latent[total_batch['labeled'] == 0],
                 torch.stack(self.landmarks_unlabeled).squeeze(),

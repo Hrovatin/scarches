@@ -64,8 +64,10 @@ tranvae = sca.models.TRANVAE.load(
     adata=source_adata
 )
 
+preds, probs = tranvae.classify(version='dist')
+print('Distance Classifier:', np.mean(preds == source_adata.obs[cell_type_key]))
 preds, probs = tranvae.classify()
-print(np.mean(preds == source_adata.obs[cell_type_key]))
+print('Probability Classifier:', np.mean(preds == source_adata.obs[cell_type_key]))
 correct_probs = probs[preds == source_adata.obs[cell_type_key]]
 incorrect_probs = probs[preds != source_adata.obs[cell_type_key]]
 data = [correct_probs, incorrect_probs]

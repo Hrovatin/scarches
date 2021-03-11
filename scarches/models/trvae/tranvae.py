@@ -6,7 +6,7 @@ import numpy as np
 
 from .trvae import trVAE
 from .losses import mse, mmd, zinb, nb
-from ._utils import one_hot_encoder
+from ._utils import one_hot_encoder, euclidean_dist
 
 
 class tranVAE(trVAE):
@@ -47,27 +47,36 @@ class tranVAE(trVAE):
         # Returns (N-batch x N-cell-types)-matrix with probabilities
         results = []
         for idx, landmark in enumerate(self.landmarks_labeled):
-            unn_probs = landmark.log_prob(data).exp()
+            unn_probs = landmark.log_prob(data.cpu()).exp()
             result = unn_probs / self.landmarks_normalize[idx].cpu()
-            result = torch.mean(result, axis=1)
+            result = torch.mean(result, dim=1)
             results.append(result)
         results = torch.stack(results).transpose(0, 1)
 
         return results
 
-    def classify(self, x, c=None, landmark=False):
+    def classify(self, x, c=None, landmark=False, version='prob'):
         if landmark:
             latent = x
         else:
             latent = self.get_latent(x,c)
 
-        results = self.get_prob_matrix(latent)
-        probs, preds = torch.max(results, axis=1)
+        if version == 'prob':
+            results = self.get_prob_matrix(latent)
+            probs, preds = torch.max(results, dim=1)
+        elif version == 'dist':
+            landmarks_means = []
+            for landmark in self.landmarks_labeled:
+                landmarks_means.append(landmark.mean)
+            landmarks_labeled_mean = torch.stack(landmarks_means)
+            landmarks_labeled_mean = landmarks_labeled_mean.to(latent.device)
+            distances = euclidean_dist(latent, landmarks_labeled_mean)
+            probs, preds = torch.max(-distances, dim=1)
         return preds, probs
 
     def check_for_unseen(self):
         results = self.get_prob_matrix(self.landmarks_unlabeled)
-        probs, preds = torch.max(results, axis=1)
+        probs, preds = torch.max(results, dim=1)
         return preds, probs
 
     def forward(self, x=None, batch=None, sizefactor=None, celltype=None, labeled=None):

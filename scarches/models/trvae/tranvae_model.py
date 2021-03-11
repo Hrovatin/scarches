@@ -54,6 +54,7 @@ class TRANVAE(BaseMixin):
         labeled_indices: Optional[list] = None,
         n_clusters: Optional[int] = None,
         clustering: Optional[str] = None,
+        use_unlabeled_loss: Optional[bool] = True,
         landmarks_labeled: Optional[list] = None,
         landmarks_normalize: Optional[list] = None,
         landmarks_unlabeled: Optional[np.ndarray] = None,
@@ -88,7 +89,7 @@ class TRANVAE(BaseMixin):
 
         if cell_types is None:
             if cell_type_key is not None:
-                self.cell_types_ = adata.obs[cell_type_key][labeled_indices].unique().tolist()
+                self.cell_types_ = adata.obs[cell_type_key][self.labeled_indices_].unique().tolist()
             else:
                 self.cell_types_ = []
         else:
@@ -131,6 +132,7 @@ class TRANVAE(BaseMixin):
 
         self.n_clusters_ = n_clusters
         self.clustering_ = clustering
+        self.use_unlabeled_loss_ = use_unlabeled_loss
         self.is_trained_ = False
 
         self.trainer = None
@@ -160,6 +162,7 @@ class TRANVAE(BaseMixin):
             self.adata,
             n_clusters=self.n_clusters_,
             clustering=self.clustering_,
+            use_unlabeled_loss=self.use_unlabeled_loss_,
             labeled_indices=self.labeled_indices_,
             condition_key=self.condition_key_,
             cell_type_key=self.cell_type_key_,
@@ -226,6 +229,7 @@ class TRANVAE(BaseMixin):
             x: Optional[np.ndarray] = None,
             c: Optional[np.ndarray] = None,
             landmark=False,
+            version='prob',
     ):
         device = next(self.model.parameters()).device
         if not landmark:
@@ -251,9 +255,9 @@ class TRANVAE(BaseMixin):
         subsampled_indices = indices.split(512)
         for batch in subsampled_indices:
             if landmark:
-                pred, prob = self.model.classify(x[batch, :], landmark=landmark)
+                pred, prob = self.model.classify(x[batch, :], landmark=landmark, version=version)
             else:
-                pred, prob = self.model.classify(x[batch, :], c[batch], landmark=landmark)
+                pred, prob = self.model.classify(x[batch, :], c[batch], landmark=landmark, version=version)
             preds += [pred.cpu().detach()]
             probs += [prob.cpu().detach()]
 
@@ -315,6 +319,7 @@ class TRANVAE(BaseMixin):
             'labeled_indices': dct['labeled_indices_'],
             'n_clusters': dct['n_clusters_'],
             'clustering': dct['clustering_'],
+            'use_unlabeled_loss': dct['use_unlabeled_loss_'],
             'landmarks_labeled': dct['landmarks_labeled_'],
             'landmarks_normalize': dct['landmarks_normalize_'],
             'landmarks_unlabeled': dct['landmarks_unlabeled_'],
@@ -349,6 +354,7 @@ class TRANVAE(BaseMixin):
         labeled_indices: Optional[list] = None,
         n_clusters: Optional[int] = None,
         clustering: Optional[str] = None,
+        use_unlabeled_loss: Optional[bool] = True,
         freeze: bool = True,
         freeze_expression: bool = True,
         remove_dropout: bool = True,
@@ -413,6 +419,7 @@ class TRANVAE(BaseMixin):
 
         init_params['n_clusters'] = n_clusters
         init_params['clustering'] = clustering
+        init_params['use_unlabeled_loss'] = use_unlabeled_loss
         init_params['labeled_indices'] = labeled_indices
 
         new_model = cls(adata, **init_params)
