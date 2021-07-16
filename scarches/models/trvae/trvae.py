@@ -41,6 +41,8 @@ class trVAE(nn.Module):
             If `True` batch normalization will be applied to layers.
        use_ln: Boolean
             If `True` layer normalization will be applied to layers.
+       reconstruction_weight: Float
+            Multiplier for reconstruction loss
     """
 
     def __init__(self,
@@ -56,6 +58,7 @@ class trVAE(nn.Module):
                  beta: float = 1,
                  use_bn: bool = False,
                  use_ln: bool = True,
+                 reconstruction_weight: float = 1
                  ):
         super().__init__()
         assert isinstance(hidden_layer_sizes, list)
@@ -78,6 +81,7 @@ class trVAE(nn.Module):
         self.use_bn = use_bn
         self.use_ln = use_ln
         self.mmd_on = mmd_on
+        self.reconstruction_weight = reconstruction_weight
 
         self.dr_rate = dr_rate
         if self.dr_rate > 0:
@@ -215,8 +219,8 @@ class trVAE(nn.Module):
 
         if self.use_mmd:
             if self.mmd_on == "z":
-                mmd_loss = mmd(z1, batch,self.n_conditions, self.beta, self.mmd_boundary)
+                mmd_loss = mmd(z1, batch, self.n_conditions, self.beta, self.mmd_boundary)
             else:
-                mmd_loss = mmd(y1, batch,self.n_conditions, self.beta, self.mmd_boundary)
+                mmd_loss = mmd(y1, batch, self.n_conditions, self.beta, self.mmd_boundary)
 
-        return recon_loss, kl_div, mmd_loss
+        return recon_loss * self.reconstruction_weight, kl_div, mmd_loss

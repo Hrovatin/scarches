@@ -48,22 +48,26 @@ class TRVAE(BaseMixin):
             If `True` batch normalization will be applied to layers.
        use_ln: Boolean
             If `True` layer normalization will be applied to layers.
+       reconstruction_weight: Float
+            Multiplier for reconstruction loss
     """
+
     def __init__(
-        self,
-        adata: AnnData,
-        condition_key: str = None,
-        conditions: Optional[list] = None,
-        hidden_layer_sizes: list = [256, 64],
-        latent_dim: int = 10,
-        dr_rate: float = 0.05,
-        use_mmd: bool = True,
-        mmd_on: str = 'z',
-        mmd_boundary: Optional[int] = None,
-        recon_loss: Optional[str] = 'nb',
-        beta: float = 1,
-        use_bn: bool = False,
-        use_ln: bool = True,
+            self,
+            adata: AnnData,
+            condition_key: str = None,
+            conditions: Optional[list] = None,
+            hidden_layer_sizes: list = [256, 64],
+            latent_dim: int = 10,
+            dr_rate: float = 0.05,
+            use_mmd: bool = True,
+            mmd_on: str = 'z',
+            mmd_boundary: Optional[int] = None,
+            recon_loss: Optional[str] = 'nb',
+            beta: float = 1,
+            use_bn: bool = False,
+            use_ln: bool = True,
+            reconstruction_weight: float = 1
     ):
         self.adata = adata
 
@@ -90,6 +94,8 @@ class TRVAE(BaseMixin):
 
         self.input_dim_ = adata.n_vars
 
+        self.reconstruction_weight_ = reconstruction_weight
+
         self.model = trVAE(
             self.input_dim_,
             self.conditions_,
@@ -103,6 +109,7 @@ class TRVAE(BaseMixin):
             self.beta_,
             self.use_bn_,
             self.use_ln_,
+            reconstruction_weight=self.reconstruction_weight_
         )
 
         self.is_trained_ = False
@@ -110,11 +117,11 @@ class TRVAE(BaseMixin):
         self.trainer = None
 
     def train(
-        self,
-        n_epochs: int = 400,
-        lr: float = 1e-3,
-        eps: float = 0.01,
-        **kwargs
+            self,
+            n_epochs: int = 400,
+            lr: float = 1e-3,
+            eps: float = 0.01,
+            **kwargs
     ):
         """Train the model.
 
@@ -138,10 +145,10 @@ class TRVAE(BaseMixin):
         self.is_trained_ = True
 
     def get_latent(
-        self,
-        x: Optional[np.ndarray] = None,
-        c: Optional[np.ndarray] = None,
-        mean: bool = False
+            self,
+            x: Optional[np.ndarray] = None,
+            c: Optional[np.ndarray] = None,
+            mean: bool = False
     ):
         """Map `x` in to the latent space. This function will feed data in encoder  and return  z for each sample in
            data.
@@ -181,15 +188,15 @@ class TRVAE(BaseMixin):
         indices = torch.arange(x.size(0), device=device)
         subsampled_indices = indices.split(512)
         for batch in subsampled_indices:
-            latent = self.model.get_latent(x[batch,:], c[batch], mean)
+            latent = self.model.get_latent(x[batch, :], c[batch], mean)
             latents += [latent.cpu().detach()]
 
         return np.array(torch.cat(latents))
 
     def get_y(
-        self,
-        x: Optional[np.ndarray] = None,
-        c: Optional[np.ndarray] = None,
+            self,
+            x: Optional[np.ndarray] = None,
+            c: Optional[np.ndarray] = None,
     ):
         """Map `x` in to the latent space. This function will feed data in encoder  and return  z for each sample in
            data.
@@ -226,7 +233,7 @@ class TRVAE(BaseMixin):
         indices = torch.arange(x.size(0), device=device)
         subsampled_indices = indices.split(512)
         for batch in subsampled_indices:
-            latent = self.model.get_y(x[batch,:], c[batch])
+            latent = self.model.get_y(x[batch, :], c[batch])
             latents += [latent.cpu().detach()]
 
         return np.array(torch.cat(latents))
@@ -261,12 +268,12 @@ class TRVAE(BaseMixin):
 
     @classmethod
     def load_query_data(
-        cls,
-        adata: AnnData,
-        reference_model: Union[str, 'TRVAE'],
-        freeze: bool = True,
-        freeze_expression: bool = True,
-        remove_dropout: bool = True,
+            cls,
+            adata: AnnData,
+            reference_model: Union[str, 'TRVAE'],
+            freeze: bool = True,
+            freeze_expression: bool = True,
+            remove_dropout: bool = True,
     ):
         """Transfer Learning function for new data. Uses old trained model and expands it for new conditions.
 
