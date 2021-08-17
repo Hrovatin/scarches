@@ -74,7 +74,7 @@ class TRVAE(BaseMixin):
         use_bn: bool = False,
         use_ln: bool = True,
         condition_weights: dict = None,
-        condition_weights_col: str =None
+        condition_weights_col: str =None,
         reconstruction_weight: float = 1
     ):
         self.adata = adata
